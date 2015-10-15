@@ -6,3 +6,4 @@ authors = ["Johann Tuffe <tafia973@gmail.com>"]
 [dependencies]
 glium = "*"
 image = "*"
+clock_ticks = "*"
