@@ -3,6 +3,8 @@ extern crate glium;
 extern crate image;
 
 use std::io::Cursor;
+use std::collections::HashMap;
+use glium::{DisplayBuild, Surface};
 
 mod atlas;
 
@@ -12,83 +14,119 @@ struct Vertex {
     tex_coords: [f32; 2],
 }
 
-fn vertex_from_atlas(xy: &(u16, u16), xy_tot: &(u16, u16)) -> Vertex {
-    let position = [2.0 * xy.0 as f32 / xy_tot.0 as f32 - 1.0,
-                    1.0 - 2.0 * xy.1 as f32 / xy_tot.1 as f32];
-    let tex_coords = [xy.0 as f32 / xy_tot.0 as f32,
-                      1.0 - xy.1 as f32 / xy_tot.1 as f32];
-    Vertex {
-        position: position,
-        tex_coords: tex_coords
+implement_vertex!(Vertex, position, tex_coords);
+
+/// insert all atlas textures into vertices
+/// returns attachment (name, index) defining 4 consecutive vertices
+fn load_atlas(atlas_src: &str, width: u16, height: u16, vertices: &mut Vec<Vertex>)
+    -> HashMap<String, u32>
+{
+    let (width, height) = (width as f32, height as f32);
+    
+    // helper closure to convert atlas texture coordinates into vertex texture's
+    let to_tex_coords = |x: u16, y: u16| {
+        let (x, y) = (x as f32, y as f32);
+        [2.0 * x / width - 1.0, 1.0 - 2.0 * y / height]
+    };
+
+    // iterates over atlas textures and convert it to centered rectangle (4 vertices)
+    let mut textures = HashMap::new();
+    let mut n = shapes.len() as u32;
+    for (name, t) in atlas::Atlas::from_file(atlas_src).into_iter() {
+        let tex0 = to_tex_coords(t.xy.0,            t.xy.1 + t.size.1);
+        let tex1 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1 + t.size.1);
+        let tex2 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1);
+        let tex3 = to_tex_coords(t.xy.0,            t.xy.1);
+        // get 4 vertices defining rectangle texture, centered per default
+        vertices.push(Vertex { pos: [0; 2], tex_coords: tex0 });
+        vertices.push(Vertex { pos: [0; 2], tex_coords: tex1 });
+        vertices.push(Vertex { pos: [0; 2], tex_coords: tex2 });
+        vertices.push(Vertex { pos: [0; 2], tex_coords: tex3 });
+        textures.insert(name, n);
+        n += 4;
     }
+    textures
 }
 
+fn draw_identity(texture_names: &HashMap<String, u32>, vertices: &mut Vec<Vertex>) -> Vec<u32> {
 
-fn main() {
-    use glium::{DisplayBuild, Surface};
+    let tex_to_pos = |t: &[f32; 2]| {
+        [2.0 * t[0] - 1.0, 2.0 * t[1] - 1.0]
+    };
 
-    let atlas = atlas::Atlas::load("/home/johann/projects/spine_render/spineboy.atlas");
-    println!("atlas count: {}", atlas.textures.len());
-
-    let display = glium::glutin::WindowBuilder::new().with_dimensions(1024, 256).build_glium().unwrap();
-    let image = image::load(Cursor::new(&include_bytes!("../spineboy.png")[..]), image::PNG).unwrap();
-    let texture = glium::texture::Texture2d::new(&display, image).unwrap();
-
-    implement_vertex!(Vertex, position, tex_coords);
-
-    let size_tot = (1024, 256);
-
-    // head
-    //   rotate: false
-    //   xy: 279, 75
-    //   size: 163, 179
-    //   orig: 163, 179
-    //   offset: 0, 0
-    //   index: -1
-    let mut shape = Vec::new();
-    let mut indices = Vec::<u32>::new();
-    for (_, t) in atlas.textures.iter() {
-
-        let n = shape.len() as u32;
-        let v0 = vertex_from_atlas(&(t.xy.0, t.xy.1 + t.size.1), &size_tot);
-        let v1 = vertex_from_atlas(&&(t.xy.0 + t.size.0, t.xy.1 + t.size.1), &size_tot);
-        let v2 = vertex_from_atlas(&(t.xy.0 + t.size.0, t.xy.1), &size_tot);
-        let v3 = vertex_from_atlas(&t.xy, &size_tot);
-
-        shape.push(v0);
-        shape.push(v1);
-        shape.push(v2);
-        shape.push(v3);
-
-        indices.extend([n, n+1, n+2, n+2, n+3, n].iter());
-
+    // Change all default position to texture position
+    for &mut v in vertices {
+        let pos = tex_to_pos(v.tex_coords);
+        v.position = pos;
     }
 
-    let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
-    let indices = glium::IndexBuffer::new(&display, glium::index::PrimitiveType::TrianglesList, &indices).unwrap();
+    // build shapes by manipulating indices
+    // show all shapes for now
+    let mut indices = Vec::with_capacity(texture_names.len() * 6);
+    for n in texture_names.values() {
+        indices.extend([n, n + 1, n + 2, n + 2, n + 3, n].iter());
+    }
+    
+    indices
+                                          
+}
+
+fn main() {
+
+    // TODO: parse program arguments
+    let atlas_src = "/home/johann/projects/spine_render/spineboy.atlas";
+    let atlas_img = "../spineboy.png";
+
+    // prepare glium objects
+    let image = image::load(Cursor::new(&include_bytes!(atlas_img)[..]), image::PNG).unwrap();
+    let (width, height) = image.dimensions().expect("couldn't read texture dimension");
+    let display = glium::glutin::WindowBuilder::new().build_glium().unwrap();
+    let texture = glium::texture::Texture2d::new(&display, image).unwrap();
+    
+    // load textures
+    let mut vertices: Vec<Vertex> = Vec::new();
+    let texture_names = load_atlas(atlas_src, width, height, &mut vertices);
+    
+    // draw identity (for test)
+    let indices = draw_identity(&texture_names, &mut vertices);
+    
+    let vertex_buffer = glium::VertexBuffer::new(&display, &vertices).unwrap();
+    let indices = glium::IndexBuffer::new(&display, 
+                                          glium::index::PrimitiveType::TrianglesList, 
+                                          &indices).unwrap();
+    
+    // opengl vertex program
     let vertex_shader_src = r#"
         #version 140
+        
         in vec2 position;
         in vec2 tex_coords;
         out vec2 v_tex_coords;
         uniform mat4 matrix;
+        
         void main() {
             v_tex_coords = tex_coords;
             gl_Position = matrix * vec4(position, 0.0, 1.0);
         }
     "#;
 
+    // opengl fragment program
     let fragment_shader_src = r#"
         #version 140
+        
         in vec2 v_tex_coords;
         out vec4 color;
         uniform sampler2D tex;
+        
         void main() {
             color = texture(tex, v_tex_coords);
         }
     "#;
 
-    let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+    let program = glium::Program::from_source(&display, 
+                                              vertex_shader_src, 
+                                              fragment_shader_src, 
+                                              None).unwrap();
 
     let mut t = -0.5;
 
