@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use glium::{DisplayBuild, Surface};
 
 mod atlas;
+mod run; // loop.rs
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -130,7 +131,9 @@ fn main() {
 
     let mut t = -0.5;
 
-    loop {
+    // the main loop, supposed to run with a constant FPS
+    run::start_loop(|| {
+    
         // we update `t`
         // t += 0.002;
         // if t > 0.5 {
@@ -160,5 +163,7 @@ fn main() {
                 _ => ()
             }
         }
-    }
+        
+        support::Action::Continue
+    });
 }
