@@ -1,7 +1,5 @@
 use std::fs::File;
-use std::io::BufReader;
-use std::collections::HashMap;
-use std::io::Lines;
+use std::io::{BufReader, Lines};
 use std::io::prelude::*;
 
 pub struct Texture {
@@ -14,64 +12,66 @@ pub struct Texture {
 }
 
 pub struct Atlas {
-    pub textures: HashMap<String, Texture>
+    lines: Lines<BufReader<File>>
 }
 
 impl Atlas {
 
-    pub fn load(src: &str) -> Atlas {
-
-        let f = File::open(src).unwrap();
+    pub fn from_file(src: &str) -> Atlas {
+        let f = File::open(src).expect("cannot open atlas file");
         let reader = BufReader::new(f);
-        let mut lines = reader.lines();
+        let lines = reader.lines();
+        Atlas {
+            lines: lines
+        }
+    }
 
-        let mut textures = HashMap::new();
+    fn next_texture(&mut self) -> Option<(String, String)> {
+        let mut old_line = String::new();
         loop {
-            if let Some((name, line)) = next_texture(&mut lines) {
-                let txt = read_texture(&line, &mut lines);
-                textures.insert(name, txt);
+            if let Some(Ok(line)) = self.lines.next() {
+                if line.starts_with("\t") || line.starts_with(" ") {
+                    return Some((old_line, line));
+                }
+                old_line = line;
             } else {
-                return Atlas {
-                    textures: textures,
-                };
+                return None;
             }
+        }
+    }
+
+    fn read_texture(&mut self, line: &str) -> Texture  {
+        let rotate = line.trim()["rotate:".len()..].trim().parse().unwrap();
+        let mut line = self.lines.next().unwrap().unwrap();
+        let xy = parse_tuple(&line.trim()["xy:".len()..]);
+        line = self.lines.next().unwrap().unwrap();
+        let size = parse_tuple(&line.trim()["size:".len()..]);
+        line = self.lines.next().unwrap().unwrap();
+        let orig = parse_tuple(&line.trim()["orig:".len()..]);
+        line = self.lines.next().unwrap().unwrap();
+        let offset = parse_tuple(&line.trim()["offset:".len()..]);
+        line = self.lines.next().unwrap().unwrap();
+        let index = line.trim()["index:".len()..].trim().parse().unwrap();
+        Texture {
+            rotate: rotate,
+            xy: xy,
+            size: size,
+            orig: orig,
+            offset: offset,
+            index: index,
         }
     }
 }
 
-fn next_texture(lines: &mut Lines<BufReader<File>>) -> Option<(String, String)> {
-    let mut old_line = String::new();
-    loop {
-        if let Some(Ok(line)) = lines.next() {
-            if line.starts_with("\t") || line.starts_with(" ") {
-                return Some((old_line, line));
-            }
-            old_line = line;
+impl Iterator for Atlas {
+    type Item = (String, Texture);
+    fn next(&mut self) -> Option<(String, Texture)> {
+        if let Some((name, line)) = self.next_texture() {
+            let txt = self.read_texture(&line);
+            Some((name, txt))
         } else {
-            return None;
+            None
         }
-    }
-}
-
-fn read_texture(line: &str, lines: &mut Lines<BufReader<File>>) -> Texture  {
-    let rotate = line.trim()["rotate:".len()..].trim().parse().unwrap();
-    let mut line = lines.next().unwrap().unwrap();
-    let xy = parse_tuple(&line.trim()["xy:".len()..]);
-    line = lines.next().unwrap().unwrap();
-    let size = parse_tuple(&line.trim()["size:".len()..]);
-    line = lines.next().unwrap().unwrap();
-    let orig = parse_tuple(&line.trim()["orig:".len()..]);
-    line = lines.next().unwrap().unwrap();
-    let offset = parse_tuple(&line.trim()["offset:".len()..]);
-    line = lines.next().unwrap().unwrap();
-    let index = line.trim()["index:".len()..].trim().parse().unwrap();
-    Texture {
-        rotate: rotate,
-        xy: xy,
-        size: size,
-        orig: orig,
-        offset: offset,
-        index: index,
     }
 }
 
