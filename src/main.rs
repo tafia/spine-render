@@ -27,7 +27,7 @@ fn load_atlas(atlas_src: &str, width: u16, height: u16, vertices: &mut Vec<Verte
     // helper closure to convert atlas texture coordinates into vertex texture's
     let to_tex_coords = |x: u16, y: u16| {
         let (x, y) = (x as f32, y as f32);
-        [2.0 * x / width - 1.0, 1.0 - 2.0 * y / height]
+        [x / width, 1.0 - y / height]
     };
 
     // iterates over atlas textures and convert it to centered rectangle (4 vertices)
