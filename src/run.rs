@@ -1,6 +1,6 @@
 extern crate clock_ticks;
 
-use std::time::duration::Duration;
+use std::thread;
 
 pub enum Action {
     Stop,
@@ -28,6 +28,6 @@ pub fn start_loop<F>(mut callback: F) where F: FnMut() -> Action {
             // if you have a game, update the state here
         }
 
-        timer::sleep(Duration::nanoseconds((FIXED_TIME_STAMP - accumulator) as i64));
+        thread::sleep_ms((FIXED_TIME_STAMP - accumulator) as u32 / 1_000_000);
     }
 }
