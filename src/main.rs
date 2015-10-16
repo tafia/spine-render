@@ -80,7 +80,13 @@ fn main() {
 
     // prepare glium objects
     let image = image::load(Cursor::new(&include_bytes!(atlas_img)[..]), image::PNG).unwrap();
-    let (width, height) = image.dimensions().expect("couldn't read texture dimension");
+    let (width, height) = match image {
+        DynamicImage::ImageRgba8(rgba) => (rgba.width(), rgba.height),
+        image => {
+            let rgba = image.to_rgba();
+            (rgba.width(), rgba.height)
+        }
+    };
     let display = glium::glutin::WindowBuilder::new().build_glium().unwrap();
     let texture = glium::texture::Texture2d::new(&display, image).unwrap();
     
