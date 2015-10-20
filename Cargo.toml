@@ -7,3 +7,7 @@ authors = ["Johann Tuffe <tafia973@gmail.com>"]
 glium = "*"
 image = "*"
 clock_ticks = "*"
+
+[dependencies.spine_tiny]
+git = "https://github.com/tafia/spine-rs.git"
+branch = "skeleton"

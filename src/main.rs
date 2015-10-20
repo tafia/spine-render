@@ -1,12 +1,13 @@
 #[macro_use]
 extern crate glium;
 extern crate image;
+extern crate spine;
 
 use std::collections::HashMap;
 use glium::{DisplayBuild, Surface};
+use glium::index::PrimitiveType;
 
-mod atlas;
-mod run; // loop.rs
+mod run;
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -32,7 +33,7 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32, vertices: &mut Vec<Verte
     // iterates over atlas textures and convert it to centered rectangle (4 vertices)
     let mut textures = HashMap::new();
     let mut n = vertices.len() as u32;
-    for (name, t) in atlas::Atlas::from_file(atlas_src).into_iter() {
+    for (name, t) in spine::Atlas::from_file(atlas_src).expect("cannot find atlas file").into_iter() {
         let tex0 = to_tex_coords(t.xy.0,            t.xy.1);
         let tex1 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1);
         let tex2 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1 + t.size.1);
@@ -75,8 +76,26 @@ fn draw_identity(texture_names: &HashMap<String, u32>, vertices: &mut Vec<Vertex
         indices.push(*n);
     }
 
-    indices
+    // add head
+    if let Some(&n) = texture_names.get("head") {
+        let n = n as usize;
+        let mut new_v = Vec::new();
+        for v in vertices[n..n+4].iter() {
+            let mut v2 = v.clone();
+            v2.position = [v.position[0] + width/3.0, v.position[1]];
+            new_v.push(v2);
+        }
+        let n = vertices.len() as u32;
+        vertices.extend(new_v);
+        indices.push(n);
+        indices.push(n + 1);
+        indices.push(n + 2);
+        indices.push(n + 2);
+        indices.push(n + 3);
+        indices.push(n);
+    }
 
+    indices
 }
 
 fn main() {
@@ -84,6 +103,7 @@ fn main() {
     // TODO: parse program arguments
     let atlas_src = "/home/johann/projects/spine_render/example/spineboy.atlas";
     let atlas_img = "/home/johann/projects/spine_render/example/spineboy.png";
+    // let atlas_img = "/home/johann/projects/spine_render/example/opengl_logo.png";
 
     // prepare glium objects
     let image = image::open(atlas_img).expect("couldn't read atlas image");
@@ -94,24 +114,23 @@ fn main() {
             (rgba.width(), rgba.height())
         }
     };
-    let display = glium::glutin::WindowBuilder::new().build_glium().unwrap();
-    let texture = glium::texture::Texture2d::new(&display, image).unwrap();
+    let window = glium::glutin::WindowBuilder::new().build_glium().unwrap();
+    let texture = glium::texture::Texture2d::new(&window, image).unwrap();
 
-    // load textures
+    println!("texture: {:?}", texture, );
+
+    // load atlas textures
     let mut vertices: Vec<Vertex> = Vec::new();
     let texture_names = load_atlas(atlas_src, width, height, &mut vertices);
 
     // draw identity (for test)
     let indices = draw_identity(&texture_names, &mut vertices, width, height);
 
-    let vertex_buffer = glium::VertexBuffer::new(&display, &vertices).unwrap();
-    let indices = glium::IndexBuffer::new(&display,
-                                          glium::index::PrimitiveType::TrianglesList,
-                                          &indices).unwrap();
-
+    let vertex_buffer = glium::VertexBuffer::new(&window, &vertices).unwrap();
+    let indices = glium::IndexBuffer::new(&window, PrimitiveType::TrianglesList, &indices).unwrap();
 
     // opengl vertex program
-    let vertex_shader_src = r#"
+    let vertex_src = r#"
         #version 140
 
         in vec2 position;
@@ -128,7 +147,7 @@ fn main() {
     "#;
 
     // opengl fragment program
-    let fragment_shader_src = r#"
+    let fragment_src = r#"
         #version 140
 
         in vec2 v_tex_coords;
@@ -140,20 +159,16 @@ fn main() {
         }
     "#;
 
-    let program = glium::Program::from_source(&display,
-                                              vertex_shader_src,
-                                              fragment_shader_src,
-                                              None).unwrap();
+    let program = glium::Program::from_source(&window, vertex_src, fragment_src, None).unwrap();
 
     // the main loop, supposed to run with a constant FPS
     run::start_loop(|| {
 
-        let mut target = display.draw();
+        let mut target = window.draw();
         target.clear_color(0.0, 0.0, 1.0, 0.0);
 
         let perspective = {
             let (width, height) = target.get_dimensions();
-            // let aspect_ratio = height as f32 / width as f32 ;
             [
                 [1.0 / width as f32, 0.0],
                 [0.0, 1.0 / height as f32]
@@ -165,10 +180,15 @@ fn main() {
             perspective: perspective
         };
 
-        target.draw(&vertex_buffer, &indices, &program, &uniforms, &Default::default()).unwrap();
+        let params = glium::DrawParameters {
+            blend: glium::Blend::alpha_blending(),
+            .. Default::default()
+        };
+
+        target.draw(&vertex_buffer, &indices, &program, &uniforms, &params).unwrap();
         target.finish().unwrap();
 
-        for ev in display.poll_events() {
+        for ev in window.poll_events() {
             match ev {
                 glium::glutin::Event::Closed => return run::Action::Stop,
                 _ => ()
@@ -177,4 +197,11 @@ fn main() {
 
         run::Action::Continue
     });
+
+        // for ev in window.wait_events() {
+        //     match ev {
+        //         glium::glutin::Event::Closed => return,
+        //         _ => ()
+        //     }
+        // }
 }
