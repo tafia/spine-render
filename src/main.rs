@@ -68,19 +68,6 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32,
     textures
 }
 
-fn to_matrix(srt: &spine::skeleton::SRT) -> Matrix4<f32> {
-    use cgmath::{Matrix2, Vector3};
-
-    let scale_matrix = Matrix4::new(srt.scale.0, 0.0, 0.0, 0.0,
-                                    0.0, srt.scale.1, 0.0, 0.0,
-                                    0.0, 0.0, 1.0, 0.0,
-                                    0.0, 0.0, 0.0, 1.0);
-    let rotation_matrix = Matrix4::from(Matrix2::from_angle(cgmath::rad(srt.rotation).into()));
-    let translation_matrix = Matrix4::from_translation(&Vector3::new(srt.position.0, srt.position.1, 0.0));
-
-    translation_matrix * rotation_matrix * scale_matrix
-}
-
 fn apply_sprite(sprites: &[spine::skeleton::animation::Sprite],
                 attachments: &HashMap<String, u32>,
                 vertices: &mut glium::VertexBuffer<Vertex>) {
@@ -90,11 +77,8 @@ fn apply_sprite(sprites: &[spine::skeleton::animation::Sprite],
         if let Some(sprite) = attachments.iter().find(|&(_, n)| *n == 4*i as u32)
                      .and_then(|(name, _)| sprites.iter()
                         .find(|s| &s.attachment == name)) {
-            let matrix = to_matrix(&sprite.srt);
-            let positions = matrix * Matrix4::new(chunk[0].position[0], chunk[0].position[1], 0.0, 1.0,
-                                                  chunk[1].position[0], chunk[1].position[1], 0.0, 1.0,
-                                                  chunk[2].position[0], chunk[2].position[1], 0.0, 1.0,
-                                                  chunk[3].position[0], chunk[3].position[1], 0.0, 1.0);
+
+            let positions = sprite.positions;
             chunk[0].position[0] = positions[0][0];
             chunk[0].position[1] = positions[0][1];
             chunk[1].position[0] = positions[1][0];
