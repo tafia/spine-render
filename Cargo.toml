@@ -7,8 +7,8 @@ authors = ["Johann Tuffe <tafia973@gmail.com>"]
 glium = "*"
 image = "*"
 clock_ticks = "*"
-cgmath = "*"
 
 [dependencies.spine_tiny]
+# path = "/home/johann/projects/spine-rs"
 git = "https://github.com/tafia/spine-rs.git"
-branch = "skeleton"
+branch = "betterSprite"
