@@ -11,4 +11,4 @@ clock_ticks = "*"
 [dependencies.spine_tiny]
 # path = "/home/johann/projects/spine-rs"
 git = "https://github.com/tafia/spine-rs.git"
-branch = "betterSprite"
+branch = "skeleton"

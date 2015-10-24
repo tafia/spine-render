@@ -69,10 +69,6 @@ fn apply_sprite(sprites: &[spine::skeleton::animation::Sprite],
     let mut indices = Vec::new();
     let mut vertices = vertices.map();
     for sprite in sprites {
-        // if &sprite.attachment == "head"
-        //     || &sprite.attachment == "goggles"
-        //     || &sprite.attachment == "eye_indifferent"
-        //     {
         if let Some(&n) = attachments.get(&sprite.attachment) {
 
             indices.push(n);
@@ -88,41 +84,10 @@ fn apply_sprite(sprites: &[spine::skeleton::animation::Sprite],
             vertices[n + 1].position = positions[1];
             vertices[n + 2].position = positions[2];
             vertices[n + 3].position = positions[3];
-
-        // }
         }
     }
     indices
 }
-
-// fn draw_identity(texture_names: &HashMap<String, u32>, vertices: &mut Vec<Vertex>,
-//     width: u32, height: u32) -> Vec<u32>
-// {
-//     let (width, height) = (width as f32, height as f32);
-//     let tex_to_pos = |t: &[f32; 2]| {
-//         [width * (2.0 * t[0] - 1.0), height * (2.0 * t[1] - 1.0)]
-//     };
-//
-//     // Change all default position to texture position
-//     for v in vertices.iter_mut() {
-//         let pos = tex_to_pos(&v.tex_coords);
-//         v.position = pos;
-//     }
-//
-//     // build shapes by manipulating indices
-//     // show all shapes for now
-//     let mut indices = Vec::with_capacity(texture_names.len() * 6);
-//     for (_, n) in texture_names.iter() {
-//         indices.push(*n);
-//         indices.push(*n + 1);
-//         indices.push(*n + 2);
-//         indices.push(*n + 2);
-//         indices.push(*n + 3);
-//         indices.push(*n);
-//     }
-//
-//     indices
-// }
 
 fn main() {
 
@@ -153,11 +118,13 @@ fn main() {
     let reader = BufReader::new(f);
     let skeleton = spine::skeleton::Skeleton::from_reader(reader).ok().expect("error while parsing json");
 
-    let walk = skeleton.get_animated_skin("default", Some("walk")).ok().expect("error while creating animated skin");
+    // let walk = skeleton.get_animated_skin("default", Some("walk")).ok().expect("error while creating animated skin");
+    // let walk = skeleton.get_animated_skin("default", Some("hit")).ok().expect("error while creating animated skin");
+    // let walk = skeleton.get_animated_skin("default", Some("run")).ok().expect("error while creating animated skin");
+    // let walk = skeleton.get_animated_skin("default", Some("death")).ok().expect("error while creating animated skin");
+    let walk = skeleton.get_animated_skin("default", Some("jump")).ok().expect("error while creating animated skin");
+    // let walk = skeleton.get_animated_skin("default", Some("idle")).ok().expect("error while creating animated skin");
     // let walk = skeleton.get_animated_skin("default", None).ok().expect("error while creating animated skin");
-
-    // draw identity (for test)
-    // let indices = draw_identity(&texture_names, &mut vertices, width, height);
 
     // opengl vertex program
     let vertex_src = r#"
@@ -197,14 +164,17 @@ fn main() {
     let mut perspective = [[0.0, 0.0], [0.0, 0.0]];
 
     let program = glium::Program::from_source(&window, vertex_src, fragment_src, None).unwrap();
-    let delta = 0.001;
+    let delta = 0.01;
     let mut iter = walk.iter(delta);
+
     // let sprites = iter.next().unwrap();
 
     // the main loop, supposed to run with a constant FPS
     run::start_loop(|| {
-
+        // for _ in 0..5 {
         if let Some(sprites) = iter.next() {
+
+            // println!("sprite: {:#?}", sprites);
 
             let indices = apply_sprite(&sprites, &texture_names, &mut vertex_buffer);
             let indices = glium::IndexBuffer::new(&window, PrimitiveType::TrianglesList, &indices).unwrap();
@@ -233,7 +203,9 @@ fn main() {
         } else {
             iter = walk.iter(delta);
         }
+// }
 
         run::Action::Continue
+        // run::Action::Stop
     });
 }
