@@ -23,8 +23,11 @@ implement_vertex!(Vertex, position, tex_coords);
 
 /// insert all atlas textures into vertices
 /// returns attachment (name, index) defining 4 consecutive vertices
-fn load_atlas(atlas_src: &str, width: u32, height: u32, vertices: &mut Vec<Vertex>)
-    -> HashMap<String, u32>
+fn load_atlas(atlas_src: &str, width: u32, height: u32,
+              attachments: &[(&str, &[[f32; 2]; 4])],
+              vertices: &mut Vec<Vertex>,
+              indices: &mut Vec<u32>)
+    -> HashMap<String, usize>
 {
     let (width, height) = (width as f32, height as f32);
 
@@ -36,65 +39,47 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32, vertices: &mut Vec<Verte
 
     // iterates over atlas textures and convert it to centered rectangle (4 vertices)
     let mut textures = HashMap::new();
-    let mut n = vertices.len() as u32;
-    for (name, t) in Atlas::from_file(atlas_src).expect("cannot find atlas file").into_iter() {
+    for (n, (name, t)) in Atlas::from_file(atlas_src).expect("cannot find atlas file").into_iter().enumerate() {
 
         let tex0 = to_tex_coords(t.xy.0,            t.xy.1);
         let tex1 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1);
         let tex2 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1 + t.size.1);
         let tex3 = to_tex_coords(t.xy.0,            t.xy.1 + t.size.1);
+        let positions = attachments.iter().find(|&&(n, _)| n == &*name).map(|&(_, positions)| *positions)
+                        .unwrap_or_else(|| [[0.0; 2]; 4]);
         // get 4 vertices defining rectangle texture, centered per default
         if t.rotate {
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex3 });
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex0 });
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex1 });
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex2 });
+            vertices.push(Vertex { position: positions[0], tex_coords: tex3 });
+            vertices.push(Vertex { position: positions[1], tex_coords: tex0 });
+            vertices.push(Vertex { position: positions[2], tex_coords: tex1 });
+            vertices.push(Vertex { position: positions[3], tex_coords: tex2 });
         } else {
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex0 });
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex1 });
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex2 });
-            vertices.push(Vertex { position: [0.0, 0.0], tex_coords: tex3 });
+            vertices.push(Vertex { position: positions[0], tex_coords: tex0 });
+            vertices.push(Vertex { position: positions[1], tex_coords: tex1 });
+            vertices.push(Vertex { position: positions[2], tex_coords: tex2 });
+            vertices.push(Vertex { position: positions[3], tex_coords: tex3 });
         }
-        textures.insert(name, n);
 
-        n += 4;
+        textures.insert(name, 6 * n);
+
+        let n = 4 * n as u32;
+        indices.push(n);
+        indices.push(n + 1);
+        indices.push(n + 2);
+        indices.push(n + 2);
+        indices.push(n + 3);
+        indices.push(n);
+
     }
     textures
-}
-
-fn apply_sprite(sprites: &[spine::skeleton::animation::Sprite],
-                attachments: &HashMap<String, u32>,
-                vertices: &mut glium::VertexBuffer<Vertex>) -> Vec<u32> {
-
-    let mut indices = Vec::new();
-    let mut vertices = vertices.map();
-    for sprite in sprites {
-        if let Some(&n) = attachments.get(&sprite.attachment) {
-
-            indices.push(n);
-            indices.push(n + 1);
-            indices.push(n + 2);
-            indices.push(n + 2);
-            indices.push(n + 3);
-            indices.push(n);
-
-            let n = n as usize;
-            let positions = sprite.positions;
-            vertices[n].position = positions[0];
-            vertices[n + 1].position = positions[1];
-            vertices[n + 2].position = positions[2];
-            vertices[n + 3].position = positions[3];
-        }
-    }
-    indices
 }
 
 fn main() {
 
     // TODO: parse program arguments
-    let atlas_src = "/home/johann/projects/spine_render/example/spineboy.atlas";
-    let atlas_img = "/home/johann/projects/spine_render/example/spineboy.png";
-    let skeleton_src = "/home/johann/projects/spine_render/example/spineboy.json";
+    let atlas_src = "/home/johann/projects/spine-render/example/spineboy.atlas";
+    let atlas_img = "/home/johann/projects/spine-render/example/spineboy.png";
+    let skeleton_src = "/home/johann/projects/spine-render/example/spineboy.json";
 
     // prepare glium objects
     let image = image::open(atlas_img).expect("couldn't read atlas image");
@@ -108,23 +93,29 @@ fn main() {
     let window = glium::glutin::WindowBuilder::new().build_glium().unwrap();
     let texture = glium::texture::Texture2d::new(&window, image).unwrap();
 
-    // load atlas textures
-    let mut vertices = Vec::new();
-    let texture_names = load_atlas(atlas_src, width, height, &mut vertices);
-    let mut vertex_buffer = glium::VertexBuffer::new(&window, &vertices).unwrap();
-
     // load skeleton from json
     let f = File::open(skeleton_src).ok().expect("Cannot open json file");
     let reader = BufReader::new(f);
     let skeleton = spine::skeleton::Skeleton::from_reader(reader).ok().expect("error while parsing json");
 
-    // let walk = skeleton.get_animated_skin("default", Some("walk")).ok().expect("error while creating animated skin");
-    // let walk = skeleton.get_animated_skin("default", Some("hit")).ok().expect("error while creating animated skin");
-    // let walk = skeleton.get_animated_skin("default", Some("run")).ok().expect("error while creating animated skin");
-    // let walk = skeleton.get_animated_skin("default", Some("death")).ok().expect("error while creating animated skin");
-    let walk = skeleton.get_animated_skin("default", Some("jump")).ok().expect("error while creating animated skin");
-    // let walk = skeleton.get_animated_skin("default", Some("idle")).ok().expect("error while creating animated skin");
-    // let walk = skeleton.get_animated_skin("default", None).ok().expect("error while creating animated skin");
+    // load atlas textures
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    let attachments = skeleton.get_skin("default").unwrap().attachment_positions();
+    let texture_names = load_atlas(atlas_src, width, height, &attachments, &mut vertices, &mut indices);
+
+    // preload vertex buffers
+    let vertex_buffer = glium::VertexBuffer::new(&window, &vertices).unwrap();
+    let indice_buffer = glium::IndexBuffer::new(&window, PrimitiveType::TrianglesList, &indices).unwrap();
+
+    // let anim = skeleton.get_animated_skin("default", Some("anim")).ok().expect("error while creating animated skin");
+    // let anim = skeleton.get_animated_skin("default", Some("hit")).ok().expect("error while creating animated skin");
+    // let anim = skeleton.get_animated_skin("default", Some("run")).ok().expect("error while creating animated skin");
+    // let anim = skeleton.get_animated_skin("default", Some("death")).ok().expect("error while creating animated skin");
+    let anim = skeleton.get_animated_skin("default", Some("jump")).ok().expect("error while creating animated skin");
+    // let anim = skeleton.get_animated_skin("default", Some("idle")).ok().expect("error while creating animated skin");
+    // let anim = skeleton.get_animated_skin("default", None).ok().expect("error while creating animated skin");
+
 
     // opengl vertex program
     let vertex_src = r#"
@@ -135,11 +126,12 @@ fn main() {
 
         out vec2 v_tex_coords;
 
-        uniform mat2 perspective;
+        uniform mat3 perspective;
+        uniform mat3 srt;
 
         void main() {
             v_tex_coords = tex_coords;
-            gl_Position = vec4(perspective * position, 0.0, 1.0);
+            gl_Position = vec4(perspective * srt * vec3(position, 1.0), 1.0);
         }
     "#;
 
@@ -161,37 +153,41 @@ fn main() {
         .. Default::default()
     };
 
-    let mut perspective = [[0.0, 0.0], [0.0, 0.0]];
+    let mut perspective = [[0.0; 3]; 3];
 
     let program = glium::Program::from_source(&window, vertex_src, fragment_src, None).unwrap();
     let delta = 0.01;
-    let mut iter = walk.iter(delta);
-
-    // let sprites = iter.next().unwrap();
+    let mut iter = anim.iter(delta);
 
     // the main loop, supposed to run with a constant FPS
     run::start_loop(|| {
         // for _ in 0..5 {
         if let Some(sprites) = iter.next() {
 
-            // println!("sprite: {:#?}", sprites);
-
-            let indices = apply_sprite(&sprites, &texture_names, &mut vertex_buffer);
-            let indices = glium::IndexBuffer::new(&window, PrimitiveType::TrianglesList, &indices).unwrap();
-
             let mut target = window.draw();
             target.clear_color(0.0, 0.0, 1.0, 0.0);
-
             let (width, height) = target.get_dimensions();
             perspective[0][0] = 1.0 / width as f32;
             perspective[1][1] = 1.0 / height as f32;
+            perspective[2][2] = 1.0;
 
-            let uniforms = uniform! {
-                tex: &texture,
-                perspective: perspective
-            };
-
-            target.draw(&vertex_buffer, &indices, &program, &uniforms, &params).unwrap();
+            for sprite in sprites.into_iter() {
+                if let Some(&n) = texture_names.get(&sprite.attachment) {
+                    let srt = sprite.srt;
+                    let uniforms = uniform! {
+                        tex: &texture,
+                        perspective: perspective,
+                        srt: [
+                                [ srt.cos * srt.scale[0], srt.sin, 0.0],
+                                [-srt.sin, srt.cos * srt.scale[1], 0.0],
+                                [ srt.position[0] , srt.position[1], 1.0f32],
+                            ]
+                    };
+                    target.draw(&vertex_buffer,
+                        indice_buffer.slice(n .. n + 6).expect(&format!("coundn't find slice {}", &n)),
+                        &program, &uniforms, &params).unwrap();
+                }
+            }
             target.finish().unwrap();
 
             for ev in window.poll_events() {
@@ -201,7 +197,7 @@ fn main() {
                 }
             }
         } else {
-            iter = walk.iter(delta);
+            iter = anim.iter(delta);
         }
 // }
 

@@ -488,7 +488,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "spine_tiny"
 version = "0.0.1"
-source = "git+https://github.com/tafia/spine-rs.git?branch=skeleton#ad6a014b6f970ee37e7d3886c1135545c05ac496"
+source = "git+https://github.com/tafia/spine-rs.git?branch=skeleton#83b59d394e80dee9df763bcab7153b8675d870a4"
 dependencies = [
  "cgmath 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "color 0.0.2 (git+https://github.com/bjz/color-rs.git)",
