@@ -157,11 +157,13 @@ fn main() {
 
     let program = glium::Program::from_source(&window, vertex_src, fragment_src, None).unwrap();
     let delta = 0.01;
-    let mut iter = anim.iter(delta);
+
+    // infinite iterator interpolating sprites every delta seconds
+    let mut iter = anim.run(delta).cycle();
 
     // the main loop, supposed to run with a constant FPS
     run::start_loop(|| {
-        // for _ in 0..5 {
+
         if let Some(sprites) = iter.next() {
 
             let mut target = window.draw();
@@ -171,7 +173,7 @@ fn main() {
             perspective[1][1] = 1.0 / height as f32;
             perspective[2][2] = 1.0;
 
-            for sprite in sprites.into_iter() {
+            for sprite in sprites {
                 if let Some(&n) = texture_names.get(&sprite.attachment) {
                     let srt = sprite.srt;
                     let uniforms = uniform! {
@@ -196,12 +198,8 @@ fn main() {
                     _ => ()
                 }
             }
-        } else {
-            iter = anim.iter(delta);
         }
-// }
 
         run::Action::Continue
-        // run::Action::Stop
     });
 }
