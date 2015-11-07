@@ -27,7 +27,7 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32,
               attachments: &[(&str, &[[f32; 2]; 4])],
               vertices: &mut Vec<Vertex>,
               indices: &mut Vec<u32>)
-    -> HashMap<String, usize>
+    -> Result<HashMap<String, usize>, spine::atlas::AtlasError>
 {
     let (width, height) = (width as f32, height as f32);
 
@@ -39,13 +39,16 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32,
 
     // iterates over atlas textures and convert it to centered rectangle (4 vertices)
     let mut textures = HashMap::new();
-    for (n, (name, t)) in Atlas::from_file(atlas_src).expect("cannot find atlas file").into_iter().enumerate() {
+    let atlas_file = try!(File::open(atlas_src)
+        .map_err(|_| spine::atlas::AtlasError::Unexpected("cannot open atlas file")));
+    for (n, t) in Atlas::from_reader(atlas_file).expect("cannot find atlas file").into_iter().enumerate() {
 
+        let t = try!(t);
         let tex0 = to_tex_coords(t.xy.0,            t.xy.1);
         let tex1 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1);
         let tex2 = to_tex_coords(t.xy.0 + t.size.0, t.xy.1 + t.size.1);
         let tex3 = to_tex_coords(t.xy.0,            t.xy.1 + t.size.1);
-        let positions = attachments.iter().find(|&&(n, _)| n == &*name).map(|&(_, positions)| *positions)
+        let positions = attachments.iter().find(|&&(n, _)| n == &*t.name).map(|&(_, positions)| *positions)
                         .unwrap_or_else(|| [[0.0; 2]; 4]);
         // get 4 vertices defining rectangle texture, centered per default
         if t.rotate {
@@ -60,7 +63,7 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32,
             vertices.push(Vertex { position: positions[3], tex_coords: tex3 });
         }
 
-        textures.insert(name, 6 * n);
+        textures.insert(t.name, 6 * n);
 
         let n = 4 * n as u32;
         indices.push(n);
@@ -71,7 +74,7 @@ fn load_atlas(atlas_src: &str, width: u32, height: u32,
         indices.push(n);
 
     }
-    textures
+    Ok(textures)
 }
 
 fn main() {
@@ -102,7 +105,7 @@ fn main() {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
     let attachments = skeleton.get_skin("default").unwrap().attachment_positions();
-    let texture_names = load_atlas(atlas_src, width, height, &attachments, &mut vertices, &mut indices);
+    let texture_names = load_atlas(atlas_src, width, height, &attachments, &mut vertices, &mut indices).unwrap();
 
     // preload vertex buffers
     let vertex_buffer = glium::VertexBuffer::new(&window, &vertices).unwrap();
