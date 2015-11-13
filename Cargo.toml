@@ -5,8 +5,8 @@ authors = ["Johann Tuffe <tafia973@gmail.com>"]
 
 [dependencies]
 glium = "*"
-image = "*"
-clock_ticks = "*"
+image = "0.4.0"
+time = "0.1"
 
 [dependencies.spine_tiny]
 # path = "/home/johann/projects/spine-rs"

@@ -1,15 +1,16 @@
-extern crate clock_ticks;
+extern crate time;
 
 use std::thread;
+use std::time::Duration;
 
 pub enum Action {
     Stop,
     Continue,
 }
 
-pub fn start_loop<F>(mut callback: F) where F: FnMut() -> Action {
+pub fn start_loop<F>(duration_ns: u64, mut callback: F) where F: FnMut() -> Action {
     let mut accumulator = 0;
-    let mut previous_clock = clock_ticks::precise_time_ns();
+    let mut previous_clock = time::precise_time_ns();
 
     loop {
         match callback() {
@@ -17,17 +18,16 @@ pub fn start_loop<F>(mut callback: F) where F: FnMut() -> Action {
             Action::Continue => ()
         };
 
-        let now = clock_ticks::precise_time_ns();
+        let now = time::precise_time_ns();
         accumulator += now - previous_clock;
         previous_clock = now;
 
-        const FIXED_TIME_STAMP: u64 = 16666667;
-        while accumulator >= FIXED_TIME_STAMP {
-            accumulator -= FIXED_TIME_STAMP;
+        while accumulator >= duration_ns {
+            accumulator -= duration_ns;
 
             // if you have a game, update the state here
         }
 
-        thread::sleep_ms((FIXED_TIME_STAMP - accumulator) as u32 / 1_000_000);
+        thread::sleep(Duration::new(0, (duration_ns - accumulator) as u32));
     }
 }
