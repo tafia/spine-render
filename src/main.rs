@@ -98,14 +98,11 @@ fn main() {
     let atlas_img = "/home/johann/projects/spine-render/example/spineboy.png";
     let skeleton_src = "/home/johann/projects/spine-render/example/spineboy.json";
     let skin_name = "default";
-    // let anim_name = "death";
-    // let anim_name = "hit";
-    let anim_name = "run";
-    // let anim_name = "jump";
-    // let anim_name = "idle";
     let duration_ns = 1_000_000_000 / 60;
 
-    let window = glium::glutin::WindowBuilder::new().build_glium().unwrap();
+    let window = glium::glutin::WindowBuilder::new()
+                 .with_title("Simple Spine rendering".to_owned())
+                 .build_glium().unwrap();
 
     // load texture
     let image = image::open(atlas_img).expect("couldn't read atlas image");
@@ -114,7 +111,6 @@ fn main() {
     // load skeleton from json
     let f = File::open(skeleton_src).expect("Cannot open json file");
     let skeleton = spine::skeleton::Skeleton::from_reader(BufReader::new(f)).expect("error while parsing json");
-    let anim = skeleton.get_animated_skin(skin_name, Some(anim_name)).unwrap();
 
     // load atlas texture, indices and vertices
     let atlas = read_atlas(atlas_src,
@@ -138,8 +134,10 @@ fn main() {
     // reusable perspective matrix
     let mut perspective = [[0.0; 3]; 3];
 
-    // infinite iterator interpolating sprites every delta seconds
-    let mut iter = anim.run(duration_ns as f32 / 1_000_000_000.0).cycle();
+    // infinite iterator running all animations
+    let anim_names = skeleton.get_animations_names();
+    let anims = anim_names.iter().map(|name| skeleton.get_animated_skin(skin_name, Some(name)).unwrap()).collect::<Vec<_>>();
+    let mut iter = anims.iter().cycle().flat_map(|anim| anim.run(duration_ns as f32 / 1_000_000_000.0));
 
     // the main loop, supposed to run with a constant FPS
     run::start_loop(duration_ns, || {
@@ -166,12 +164,12 @@ fn main() {
                 }
             }
             target.finish().unwrap();
+        }
 
-            for ev in window.poll_events() {
-                match ev {
-                    glium::glutin::Event::Closed => return run::Action::Stop,
-                    _ => ()
-                }
+        for ev in window.poll_events() {
+            match ev {
+                glium::glutin::Event::Closed => return run::Action::Stop,
+                _ => (),
             }
         }
 
