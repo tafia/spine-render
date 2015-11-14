@@ -2,13 +2,18 @@
 extern crate glium;
 extern crate image;
 extern crate spine;
+extern crate rustc_serialize;
+extern crate docopt;
 
-use std::collections::HashMap;
+use docopt::Docopt;
+
 use glium::{DisplayBuild, Surface};
 use glium::index::PrimitiveType;
+
 use spine::atlas::{Atlas, AtlasError};
 use spine::skeleton::Skeleton;
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 
@@ -90,32 +95,64 @@ fn read_atlas(atlas_src: &str, width: u32, height: u32, skeleton: &Skeleton, ski
     })
 }
 
+const USAGE: &'static str = "
+Spine renderer.
+
+Usage:
+  spine-render play [options] <json> <atlas> <png>
+  spine-render list <json>
+  spine-render (-h | --help)
+
+Options:
+  -h --help      Show this screen.
+  --version      Show version.
+  --fps <fps>    Frames per seconds [default: 60.0].
+  --anim <anim>  Animation name [default: *].
+  --skin <skin>  Skin name [default: default].
+";
+
+
+#[derive(Debug, RustcDecodable)]
+struct Args {
+    flag_fps: f32,
+    flag_anim: String,
+    flag_skin: String,
+    arg_json: String,
+    arg_atlas: Option<String>,
+    arg_png: Option<String>,
+    cmd_play: bool,
+    cmd_list: bool,
+}
 
 fn main() {
 
-    // TODO: parse program arguments
-    let atlas_src = "/home/johann/projects/spine-render/example/spineboy.atlas";
-    let atlas_img = "/home/johann/projects/spine-render/example/spineboy.png";
-    let skeleton_src = "/home/johann/projects/spine-render/example/spineboy.json";
-    let skin_name = "default";
-    let duration_ns = 1_000_000_000 / 60;
+    let args: Args = Docopt::new(USAGE)
+                            .and_then(|d| d.decode())
+                            .unwrap_or_else(|e| e.exit());
+
+    // load skeleton from json
+    let f = File::open(&args.arg_json).expect("Cannot open json file");
+    let skeleton = spine::skeleton::Skeleton::from_reader(BufReader::new(f)).expect("error while parsing json");
+
+    if args.cmd_list {
+        println!("Animations list:\n{:#?}", &skeleton.get_animations_names());
+        println!("\nSkins list:\n{:#?}", &skeleton.get_skins_names());
+        println!("\nAttachments list:\n{:#?}", &skeleton.get_attachments_names());
+        return;
+    }
 
     let window = glium::glutin::WindowBuilder::new()
                  .with_title("Simple Spine rendering".to_owned())
                  .build_glium().unwrap();
 
     // load texture
-    let image = image::open(atlas_img).expect("couldn't read atlas image");
+    let image = image::open(&args.arg_png.as_ref().unwrap()).expect("couldn't read atlas image");
     let texture = glium::texture::CompressedSrgbTexture2d::new(&window, image).unwrap();
 
-    // load skeleton from json
-    let f = File::open(skeleton_src).expect("Cannot open json file");
-    let skeleton = spine::skeleton::Skeleton::from_reader(BufReader::new(f)).expect("error while parsing json");
-
     // load atlas texture, indices and vertices
-    let atlas = read_atlas(atlas_src,
+    let atlas = read_atlas(&args.arg_atlas.as_ref().unwrap(),
                            texture.get_width(), texture.get_height().unwrap(),
-                           &skeleton, skin_name).unwrap();
+                           &skeleton, &args.flag_skin).unwrap();
 
     // preload vertex buffers
     let vertex_buffer = glium::VertexBuffer::new(&window, &atlas.vertices).unwrap();
@@ -136,11 +173,18 @@ fn main() {
 
     // infinite iterator running all animations
     let anim_names = skeleton.get_animations_names();
-    let anims = anim_names.iter().map(|name| skeleton.get_animated_skin(skin_name, Some(name)).unwrap()).collect::<Vec<_>>();
-    let mut iter = anims.iter().cycle().flat_map(|anim| anim.run(duration_ns as f32 / 1_000_000_000.0));
+    let anims = match &*args.flag_anim {
+        "*" => {
+            anim_names.iter()
+                .map(|ref name| skeleton.get_animated_skin(&args.flag_skin, Some(name)).unwrap())
+                .collect::<Vec<_>>()
+        },
+        name => vec![skeleton.get_animated_skin(&args.flag_skin, Some(name)).unwrap()],
+    };
+    let mut iter = anims.iter().cycle().flat_map(|anim| anim.run(1.0 / args.flag_fps));
 
     // the main loop, supposed to run with a constant FPS
-    run::start_loop(duration_ns, || {
+    run::start_loop((1_000_000_000.0 / args.flag_fps) as u64, || {
 
         if let Some(sprites) = iter.next() {
 

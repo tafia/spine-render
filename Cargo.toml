@@ -4,9 +4,11 @@ version = "0.1.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 
 [dependencies]
-glium = "*"
+glium = "0.11"
 image = "0.4.0"
 time = "0.1"
+docopt = "0.6"
+rustc-serialize = "0.3"
 
 [dependencies.spine_tiny]
 # path = "/home/johann/projects/spine-rs"
