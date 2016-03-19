@@ -146,7 +146,9 @@ fn main() {
                  .build_glium().unwrap();
 
     // load texture
-    let image = image::open(&args.arg_png.as_ref().unwrap()).expect("couldn't read atlas image");
+    let image = image::open(&args.arg_png.as_ref().unwrap()).expect("couldn't read atlas image").to_rgba();
+    let image_dimensions = image.dimensions();
+    let image = glium::texture::RawImage2d::from_raw_rgba_reversed(image.into_raw(), image_dimensions);
     let texture = glium::texture::CompressedSrgbTexture2d::new(&window, image).unwrap();
 
     // load atlas texture, indices and vertices
